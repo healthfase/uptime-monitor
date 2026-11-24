@@ -1,6 +1,6 @@
 
 package dev.uptime.monitor.controller;
-
+import dev.uptime.monitor.dto.SitePageResponse;
 import dev.uptime.monitor.entity.Site;
 import dev.uptime.monitor.service.SiteService;
 import org.springframework.http.HttpStatus;
@@ -13,7 +13,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/sites")
-public class    SiteController {
+public class SiteController {
     // GET /api/sites/{id}/history
     @GetMapping("/{id}/history")
     public ResponseEntity<?> getSiteHistory(
@@ -44,9 +44,24 @@ public class    SiteController {
     }
 
     // GET /api/sites
+    // GET /api/sites
     @GetMapping
-    public List<Site> getAllSites() {
-        return siteService.getAllSites();
+    public SitePageResponse getSites(
+            @RequestParam(defaultValue = "all") String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "name") String sort,
+            @RequestParam(defaultValue = "asc") String direction
+    ) {
+        return siteService.getSitesPage(
+                status,
+                search,
+                page,
+                size,
+                sort,
+                direction
+        );
     }
 
     // GET /api/sites/{id}

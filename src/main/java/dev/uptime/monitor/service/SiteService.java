@@ -8,14 +8,120 @@ import dev.uptime.monitor.entity.Site;
 import dev.uptime.monitor.repository.SiteRepository;
 import org.springframework.stereotype.Service;
 import dev.uptime.monitor.repository.CheckResultRepository;
-
+import dev.uptime.monitor.dto.SitePageResponse;
+import dev.uptime.monitor.dto.SiteStatisticsResponse;
+import java.util.Comparator;
+import java.util.Locale;
 import java.net.URI;
 import java.util.List;
-import dev.uptime.monitor.dto.SiteStatisticsResponse;
 
 @Service
 public class SiteService {
+    public SitePageResponse getSitesPage(
+            String status,
+            String search,
+            int page,
+            int size,
+            String sort,
+            String direction
+    ) {
+        if (page < 0) {
+            throw new IllegalArgumentException("Page must be >= 0");
+        }
 
+        if (size < 1 || size > 100) {
+            throw new IllegalArgumentException("Size must be between 1 and 100");
+        }
+
+        if (!sort.equals("name") && !sort.equals("url") && !sort.equals("id")) {
+            throw new IllegalArgumentException("Invalid sort field");
+        }
+
+        if (!direction.equalsIgnoreCase("asc")
+                && !direction.equalsIgnoreCase("desc")) {
+            throw new IllegalArgumentException("Direction must be asc or desc");
+        }
+
+        if (!status.equalsIgnoreCase("all")
+                && !status.equalsIgnoreCase("online")
+                && !status.equalsIgnoreCase("offline")) {
+            throw new IllegalArgumentException("Status must be all, online or offline");
+        }
+
+        List<Site> sites = siteRepository.findAll();
+
+        // Фильтрация по поисковой строке
+        if (search != null && !search.isBlank()) {
+            String query = search.toLowerCase(Locale.ROOT);
+
+            sites = sites.stream()
+                    .filter(site ->
+                            (site.getName() != null
+                                    && site.getName().toLowerCase(Locale.ROOT).contains(query))
+                                    || site.getUrl().toLowerCase(Locale.ROOT).contains(query)
+                    )
+                    .toList();
+        }
+
+        // Фильтрация по статусу
+        if (!status.equalsIgnoreCase("all")) {
+            boolean onlineFilter = status.equalsIgnoreCase("online");
+
+            sites = sites.stream()
+                    .filter(site -> getSiteStatistics(site.getId()).online() == onlineFilter)
+                    .toList();
+        }
+
+        // Сортировка
+        Comparator<Site> comparator;
+
+        switch (sort) {
+            case "name" -> comparator = Comparator.comparing(
+                    Site::getName,
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
+            );
+            case "url" -> comparator = Comparator.comparing(Site::getUrl);
+            case "id" -> comparator = Comparator.comparing(Site::getId);
+            default -> throw new IllegalArgumentException("Invalid sort field");
+        }
+
+        if (direction.equalsIgnoreCase("desc")) {
+            comparator = comparator.reversed();
+        }
+
+        sites = sites.stream()
+                .sorted(comparator)
+                .toList();
+
+        // Пагинация
+        long totalElements = sites.size();
+
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+
+        int fromIndex = page * size;
+
+        if (fromIndex >= totalElements) {
+            return new SitePageResponse(
+                    List.of(),
+                    page,
+                    size,
+                    totalElements,
+                    totalPages
+            );
+        }
+
+        int toIndex = Math.min(fromIndex + size, sites.size());
+
+        List<Site> pageSites = sites.subList(fromIndex, toIndex);
+
+        return new SitePageResponse(
+                pageSites,
+                page,
+                size,
+                totalElements,
+                totalPages
+        );
+    }
     private final SiteRepository siteRepository;
     private final CheckResultRepository checkResultRepository;
 
